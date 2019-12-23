@@ -1,0 +1,4 @@
+module CCryptoOpenSSL {
+    umbrella "/Users/austinellis/GitHub/FrontpageWatch2020/.build/checkouts/crypto/Sources/CCryptoOpenSSL/include"
+    export *
+}
