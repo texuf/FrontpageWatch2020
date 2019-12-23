@@ -1,15 +1,36 @@
-# Vapor Clean
+# FrontpageWatch2020
 
-This is a template for Vapor 3 users that does the absolute minimum to set up a working Vapor 3 environment.
 
-Unlike the official templates that are currently available, this template does not include vast swathes of extra example code that you will always need to delete. Instead, it adds just a single “hello” route so you can be sure everything is working correctly.
+## For fun, not so much profit
 
-Although this repository contains a LICENSE file, this is meant for you to replace with whatever license you intend to use – please consider what little code is in this repository as public domain, and yours to do with as you please.
 
-It’s my hope that the official Vapor project will add a template similar to this one at some point in the future, but until then please use this however you want.
 
-## Try it out
 
-If you have already installed the Vapor toolbox, you can create a new Vapor project from this repo using the following command:
+### How I built this
 
-    vapor new MyProject --template=twostraws/vapor-clean
+# Step by step instructions
+
+```
+# install or update vapor
+brew install vapor
+brew upgrade vapor
+# create a vapor project using clean template
+vapor new MyProject --template=twostraws/vapor-clean
+cd MyProject
+vapor xcode
+# add remote to github repo 
+git remote add origin git@github.com:myusername/myreponame.git
+git push -u origin master
+# create a command
+
+# add postgress
+
+# create a schema
+
+
+
+
+# install the heroku scheduler https://devcenter.heroku.com/articles/scheduler
+heroku addons:create scheduler:standard
+
+```

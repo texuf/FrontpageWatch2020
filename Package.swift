@@ -6,10 +6,12 @@ let package = Package(
     dependencies: [
         // 💧 A server-side Swift web framework.
         .package(url: "https://github.com/vapor/vapor.git", .upToNextMinor(from: "3.3.0")),
+        /// 💻 APIs for creating interactive CLI tools.
+        .package(url: "https://github.com/vapor/console.git", from: "3.0.0"),
     ],
     targets: [
         .target(name: "App", dependencies: ["Vapor"]),
-        .target(name: "Run", dependencies: ["App"]),
+        .target(name: "Run", dependencies: ["App", "Command"]),
         .testTarget(name: "AppTests", dependencies: ["App"]),
     ]
 )

@@ -8,6 +8,13 @@ public func configure(
     _ env: inout Environment,
     _ services: inout Services
 ) throws {
+    /// Create a `CommandConfig` with default commands.
+    var commandConfig = CommandConfig.default()
+    /// Add the `CowsayCommand`.
+    commandConfig.use(QueryFrontpageCommand(), as: "query")
+    /// Register this `CommandConfig` to services.
+    services.register(commandConfig)
+    
     // Register routes to the router
     let router = EngineRouter.default()
     try routes(router)
