@@ -1,3 +1,4 @@
+import FluentPostgreSQL
 import Vapor
 
 /// Called before your application initializes.
@@ -8,6 +9,13 @@ public func configure(
     _ env: inout Environment,
     _ services: inout Services
 ) throws {
+    print("!!!!!! configure!!! ")
+    try services.register(FluentPostgreSQLProvider())
+    
+    var migrations = MigrationConfig()
+    migrations.add(model: Post.self, database: .psql)
+    services.register(migrations)
+    
     /// Create a `CommandConfig` with default commands.
     var commandConfig = CommandConfig.default()
     /// Add the `CowsayCommand`.

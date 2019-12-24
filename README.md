@@ -26,6 +26,7 @@ git push -u origin master
 
 # create a command
 # https://docs.vapor.codes/3.0/command/overview/
+swift run Run query
 
 # push to heroku
 echo 'web: Run serve --env production --hostname 0.0.0.0 --port $PORT' > Procfile
@@ -35,11 +36,29 @@ heroku buildpacks:set vapor/vapor
 git commit -am "Update"
 git push heroku master
 
+# test 
+heroku run Run query
+
 # add postgress
+https://docs.vapor.codes/3.0/fluent/getting-started/
+brew install postgresql
+brew services start postgresql
+/usr/local/opt/postgres/bin/createuser -s postgres
 
 # create a schema
+    # create initial post model
+    # create migration for initial post model
+    # access model in command in future
 
+# auth reddit
 
+# call reddit
+
+# save, diff
+
+# save diff
+
+# post
 
 
 # install the heroku scheduler https://devcenter.heroku.com/articles/scheduler
