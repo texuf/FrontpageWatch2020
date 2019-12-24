@@ -50,6 +50,12 @@ brew services start postgresql
     # create migration for initial post model
     # access model in command in future
 
+# add postgress to heroku
+heroku addons:create heroku-postgresql:hobby-dev
+git commit -am "update"
+git push # push to github
+git push heroku master # deploy to heroku
+
 # auth reddit
 
 # call reddit
