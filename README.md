@@ -64,6 +64,11 @@ git push heroku master # deploy to heroku
 # local env
  - env vars are parsed from the command line or the env, run with --help for more info
 
+ # heroku env
+ heroku config:set REDDIT_USERNAME=my_username
+ heroku config:set REDDIT_PASSWORD=my_password
+ heroku config:set CLIENT_ID=client id
+ heroku config:set REDDIT_SECRET=client secret
 
 # call reddit
 
