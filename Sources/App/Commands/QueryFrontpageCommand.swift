@@ -16,7 +16,12 @@ struct QueryFrontpageCommand: Command {
     
     /// See `Command`
     var options: [CommandOption] {
-        return []
+        return [
+            .env(name: "REDDIT_USERNAME", short: "u"),
+            .env(name: "REDDIT_PASSWORD", short: "p"),
+            .env(name: "CLIENT_ID", short: "c"),
+            .env(name: "CLIENT_SECRET", short: "s"),
+        ]
     }
     
     /// See `Command`
@@ -26,25 +31,14 @@ struct QueryFrontpageCommand: Command {
     
     /// See `Command`.
     func run(using context: CommandContext) throws -> Future<Void> {
-        let message = "whoo"
-        /// We can use requireOption here since both options have default values
-        let eyes = "hoo"
-        let tongue = "boo"
-        let padding = String(repeating: "-", count: message.count)
-        let text: String = """
-          \(padding)
-        < \(message) >
-          \(padding)
-                  \\   ^__^
-                   \\  (\(eyes)\\_______
-                      (__)\\       )\\/\\
-                        \(tongue)  ||----w |
-                           ||     ||
-        """
-        context.console.print(text)
+        let env = (
+            username: try Environment.require("REDDIT_USERNAME", with: context),
+            password: try Environment.require("REDDIT_PASSWORD", with: context),
+            clientID: try Environment.require("CLIENT_ID", with: context),
+            clientSecret: try Environment.require("CLIENT_SECRET", with: context)
+        )
         
-        
-        print("!!!!! run !!!! \(context.container)")
+        print("!!!! env \(env)")
         
         /*let promise = context.container.eventLoop.newPromise(Void.self)
         
@@ -84,5 +78,29 @@ struct QueryFrontpageCommand: Command {
         
         //return promise.futureResult.transform(to: .done(on: context.container))
         return future.transform(to: .done(on: context.container))
+    }
+}
+
+extension Environment {
+    /// check context then env for key, return value, throw if neither exists
+    static func require(_ key: String, with context: CommandContext) throws -> String {
+        do {
+            return try context.requireOption(key)
+        } catch {
+            if let value = Environment.get(key) {
+                return value
+            }
+            throw error
+        }
+    }
+}
+
+extension CommandOption {
+    static func env(name: String, short: Character) -> CommandOption {
+        return CommandOption.value(name: name, short: short, default: nil, help: helpFor(name: name, short: short))
+    }
+    
+    private static func helpFor(name: String, short: Character) -> [String] {
+        return ["`-\(short)` command line argument or `\(name)` environment variable required"]
     }
 }

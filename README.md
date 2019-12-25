@@ -57,6 +57,13 @@ git push # push to github
 git push heroku master # deploy to heroku
 
 # auth reddit
+    # https://github.com/reddit-archive/reddit/wiki/oauth2
+    # choose app type: https://github.com/reddit-archive/reddit/wiki/oauth2-app-types (i chose script)
+    # quick start for script apps: https://github.com/reddit-archive/reddit/wiki/OAuth2-Quick-Start-Example
+
+# local env
+ - env vars are parsed from the command line or the env, run with --help for more info
+
 
 # call reddit
 
