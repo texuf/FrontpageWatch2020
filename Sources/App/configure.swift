@@ -9,15 +9,11 @@ public func configure(
     _ env: inout Environment,
     _ services: inout Services
 ) throws {
-    print("!!!!!! configure name: \(env.name) isRelease: \(env.isRelease) has db: \(Environment.get("DATABASE_URL") != nil)")
-    
-    
     try services.register(FluentPostgreSQLProvider())
     
     // Configure a PostgreSQL database
     let postgreSQLConfig : PostgreSQLDatabaseConfig
 
-    print("config 1")
     if let url = Environment.get("DATABASE_URL") {
         postgreSQLConfig = PostgreSQLDatabaseConfig(url: url)!
     } else {
@@ -25,13 +21,12 @@ public func configure(
     }
     
     let postgreSQL = PostgreSQLDatabase(config: postgreSQLConfig)
-    print("config 2")
     // Register the configured PostreSQL database to the database config.
     var databases = DatabasesConfig()
     databases.add(database: postgreSQL, as: .psql)
     services.register(databases)
     
-    print("config 3")
+    // MIGRATIONS
     var migrations = MigrationConfig()
     migrations.add(model: Post.self, database: .psql)
     services.register(migrations)
