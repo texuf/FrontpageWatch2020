@@ -22,6 +22,8 @@
 
 /* Begin PBXBuildFile section */
 		C2A1DAB523B1D3290089A2F6 /* Migration_01_initial.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2A1DAB423B1D3290089A2F6 /* Migration_01_initial.swift */; };
+		C2A1DADF23B3FC860089A2F6 /* AccessToken.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2A1DADE23B3FC860089A2F6 /* AccessToken.swift */; };
+		C2A1DAE223B42C750089A2F6 /* PostsResponseData.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2A1DAE123B42C750089A2F6 /* PostsResponseData.swift */; };
 		OBJ_1000 /* Multipart.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = "Multipart::Multipart::Product" /* Multipart.framework */; };
 		OBJ_1001 /* HTTP.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = "HTTP::HTTP::Product" /* HTTP.framework */; };
 		OBJ_1002 /* NIOHTTP1.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = "swift-nio::NIOHTTP1::Product" /* NIOHTTP1.framework */; };
@@ -5242,6 +5244,8 @@
 
 /* Begin PBXFileReference section */
 		C2A1DAB423B1D3290089A2F6 /* Migration_01_initial.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Migration_01_initial.swift; sourceTree = "<group>"; };
+		C2A1DADE23B3FC860089A2F6 /* AccessToken.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccessToken.swift; sourceTree = "<group>"; };
+		C2A1DAE123B42C750089A2F6 /* PostsResponseData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PostsResponseData.swift; sourceTree = "<group>"; };
 		"Console::Command::Product" /* Command.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; path = Command.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		"Console::Console::Product" /* Console.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; path = Console.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		"Console::Logging::Product" /* Logging.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; path = Logging.framework; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -6923,6 +6927,14 @@
 			path = Migrations;
 			sourceTree = "<group>";
 		};
+		C2A1DAE023B42C590089A2F6 /* Content */ = {
+			isa = PBXGroup;
+			children = (
+				C2A1DAE123B42C750089A2F6 /* PostsResponseData.swift */,
+			);
+			path = Content;
+			sourceTree = "<group>";
+		};
 		OBJ_101 /* Pipeline */ = {
 			isa = PBXGroup;
 			children = (
@@ -6959,6 +6971,7 @@
 			isa = PBXGroup;
 			children = (
 				OBJ_12 /* Post.swift */,
+				C2A1DADE23B3FC860089A2F6 /* AccessToken.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -8891,8 +8904,9 @@
 		OBJ_8 /* App */ = {
 			isa = PBXGroup;
 			children = (
-				C2A1DAB323B1D3050089A2F6 /* Migrations */,
 				OBJ_9 /* Commands */,
+				C2A1DAE023B42C590089A2F6 /* Content */,
+				C2A1DAB323B1D3050089A2F6 /* Migrations */,
 				OBJ_11 /* Models */,
 				OBJ_13 /* boot.swift */,
 				OBJ_14 /* configure.swift */,
@@ -12169,11 +12183,13 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 0;
 			files = (
+				C2A1DADF23B3FC860089A2F6 /* AccessToken.swift in Sources */,
 				OBJ_982 /* QueryFrontpageCommand.swift in Sources */,
 				OBJ_983 /* Post.swift in Sources */,
 				OBJ_984 /* boot.swift in Sources */,
 				OBJ_985 /* configure.swift in Sources */,
 				C2A1DAB523B1D3290089A2F6 /* Migration_01_initial.swift in Sources */,
+				C2A1DAE223B42C750089A2F6 /* PostsResponseData.swift in Sources */,
 				OBJ_986 /* routes.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

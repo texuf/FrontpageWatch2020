@@ -8,6 +8,5 @@
 import FluentPostgreSQL
 
 
-extension Post: PostgreSQLMigration {
-    
-}
+extension Post: PostgreSQLMigration {}
+extension AccessToken: PostgreSQLMigration {}

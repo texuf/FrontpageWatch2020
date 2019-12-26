@@ -29,6 +29,7 @@ public func configure(
     // MIGRATIONS
     var migrations = MigrationConfig()
     migrations.add(model: Post.self, database: .psql)
+    migrations.add(model: AccessToken.self, database: .psql)
     services.register(migrations)
     
     /// Create a `CommandConfig` with default commands.
