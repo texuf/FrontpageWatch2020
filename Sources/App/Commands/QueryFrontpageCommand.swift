@@ -33,6 +33,7 @@ struct QueryFrontpageCommand: Command {
         let clientID: String
         let clientSecret: String
         let client: Client
+        let skipPost: Bool
     }
     
     struct Initial {
@@ -76,6 +77,7 @@ struct QueryFrontpageCommand: Command {
             .env(name: "REDDIT_PASSWORD", short: "p"),
             .env(name: "CLIENT_ID", short: "c"),
             .env(name: "CLIENT_SECRET", short: "s"),
+            .env(name: "skipPost", short: "k")
         ]
     }
     
@@ -91,7 +93,8 @@ struct QueryFrontpageCommand: Command {
             password: try Environment.require("REDDIT_PASSWORD", with: context),
             clientID: try Environment.require("CLIENT_ID", with: context),
             clientSecret: try Environment.require("CLIENT_SECRET", with: context),
-            client: try context.container.client()
+            client: try context.container.client(),
+            skipPost: context.options["skipPost"] == "true"
         )
         
         let future = context.container.newConnection(to: .psql)
@@ -134,7 +137,7 @@ struct QueryFrontpageCommand: Command {
                     .compactMap { post in
                         let newRank = Int64(currentPosts.firstIndex(where: { $0.data.name == post.name }) ?? Int(post.rank))
                         guard post.rank != newRank else { return nil }
-                        print("updating \(post.name) to \(newRank) was (\(post.rank))")
+                        // print("updating \(post.name) to \(newRank) was (\(post.rank))")
                         return Post(
                             id: post.id,
                             name: post.name,
@@ -183,7 +186,6 @@ struct QueryFrontpageCommand: Command {
                 let data = censoredPost.info.data
                 let title = "[#\(censoredPost.post.rank)|+\(data.ups)|\(data.num_comments)] \(data.title.truncate(length: 240 - data.subreddit_name_prefixed.count)) [\(data.subreddit_name_prefixed)]"
                 let permalink = "reddit.com\(data.permalink)"
-                print("posting \(title) \(permalink)")
                 let httpReq = HTTPRequest(
                     method: .POST,
                     url: URLs.submit,
@@ -197,6 +199,13 @@ struct QueryFrontpageCommand: Command {
                 let waitTime = 1 * Double(params.offset)
                 DispatchQueue.global().asyncAfter(deadline: .now() + waitTime) {
                     print("posting \(title) after \(waitTime)s wait")
+                    guard !env.skipPost else {
+                        print("returning because skipPost == 'true'")
+                        _ = censoredPost.post.delete(on: removedInfo.diff.initial.connection).map {
+                            promise.succeed()
+                        }
+                        return
+                    }
                     let req = Request(http: httpReq, using: context.container)
                     _ = env.client.send(req).map { response in
                         print("!!!! submit post response \(response.content)")
@@ -230,11 +239,11 @@ struct QueryFrontpageCommand: Command {
     
     private static func getAuth(context: CommandContext, initial: Initial, env: Env) -> Future<Auth> {
         return AccessToken.query(on: initial.connection).all().flatMap(to: Auth.self) { tokens in
-            print("access token queried \(tokens)")
+            // print("access token queried \(tokens)")
             let promise = context.container.eventLoop.newPromise(Auth.self)
             let now = Date()
             if let token = tokens.first, token.expiresAt > now {
-                print("access token loaded \(token)")
+                print("access token loaded")
                 promise.succeed(result: Auth(initial: initial, token: token.accessToken))
             } else {
                 let httpReq = HTTPRequest(
@@ -252,14 +261,11 @@ struct QueryFrontpageCommand: Command {
                     if let error = try? response.content.syncGet(String.self, at: "error") {
                         throw FrontpageError.authError(message: error)
                     }
-                    print("\nwahahaah-\n \(response.content)")
+                    // print("\nwahahaah-\n \(response.content)")
                     let accessToken = try AccessToken(now: now, context: response.content)
                     _ = (tokens.isEmpty ? accessToken.create(on: initial.connection)  : accessToken.update(on: initial.connection)).map { _ in
-                        print("access token saved!!!")
-                        _ = AccessToken.query(on: initial.connection).all().map { xxx in
-                            print("get tokens!!! \(xxx)")
-                            promise.succeed(result: Auth(initial: initial, token: accessToken.accessToken))
-                        }
+                        print("access retreived and saved!!!")
+                        promise.succeed(result: Auth(initial: initial, token: accessToken.accessToken))
                     }
                 }
             }
@@ -296,10 +302,10 @@ struct QueryFrontpageCommand: Command {
         }
         
         if responses.count >= max - 1 || (!responses.isEmpty && responses.last!.after == nil) {
-            print("fetch!!! returning now!!!")
+            // print("fetch!!! returning now!!!")
             return future
         } else {
-            print("queueing up next one now")
+            // print("queueing up next one now")
             return future.flatMap { responses in
                 return QueryFrontpageCommand.fetchFrontpage(client: client, token: token, responses: responses)
             }
