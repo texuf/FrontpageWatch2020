@@ -71,8 +71,10 @@ git push heroku master # deploy to heroku
  heroku config:set REDDIT_SECRET=client secret
 
 # call reddit
+hurray
 
 # save, diff
+yep
 
 # save diff
 

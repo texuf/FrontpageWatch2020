@@ -20,6 +20,9 @@ fileprivate struct URLs {
         let after = (after != nil) ? "&after=\(after!)" : ""
         return "https://www.reddit.com/r/all/hot.json?limit=100&g=GLOBAL\(after)"
     }
+    static func info(for names: [String]) -> String {
+        return "https://old.reddit.com/api/info.json?id=\(names.joined(separator: ","))"
+    }
 }
 
 struct QueryFrontpageCommand: Command {
@@ -30,6 +33,7 @@ struct QueryFrontpageCommand: Command {
         let clientSecret: String
         let client: Client
     }
+    
     struct Initial {
         let connection: PostgreSQLConnection
         let posts: [Post]
@@ -44,6 +48,19 @@ struct QueryFrontpageCommand: Command {
         let initial: Initial
         let token: String
         let currentPosts: [PostsResponseData]
+    }
+    
+    struct Diff {
+        let initial: Initial
+        let token: String
+        let newPosts: [Post]
+        let updatedPosts: [Post]
+        let removedPosts: [Post]
+    }
+    
+    struct RemovedInfo {
+        let diff: Diff
+        let removedPosts: [PostsResponseData]
     }
     
     /// See `Command`
@@ -84,7 +101,7 @@ struct QueryFrontpageCommand: Command {
             }
         }
         .flatMap(to: Auth.self) { initial in
-            print("!! posts \(initial)")
+            print("!! posts initial: \(initial.posts.count)")
             return QueryFrontpageCommand.getAuth(context: context, initial: initial, env: env)
         }
         .flatMap(to: Remote.self) { auth in
@@ -97,9 +114,57 @@ struct QueryFrontpageCommand: Command {
                 )
             }
         }
-        .map(to: Void.self) { remote in
-            print("!!!! close db!! \(remote)")
-            remote.initial.connection.close()
+        .map(to: Diff.self) { remote in
+            let currentPosts: [PostsResponseData.Child] = remote.currentPosts.flatMap { $0.children }
+            let previousNames = Set(remote.initial.posts.map { $0.name })
+            let currentNames = Set(currentPosts.map { $0.data.name })
+            let removedPostNames = previousNames.subtracting(currentNames)
+            let newNames = currentNames.subtracting(previousNames)
+            // print("removed \(removedPostNames.count) added \(newNames.count)")
+            return Diff(
+                initial: remote.initial,
+                token: remote.token,
+                newPosts: currentPosts
+                    .enumerated()
+                    .filter { arg in newNames.contains(arg.element.data.name) }
+                    .map { arg in Post(name: arg.element.data.name, rank: Int64(arg.offset) )},
+                updatedPosts: remote.initial.posts
+                    .filter { currentNames.contains($0.name )}
+                    .compactMap { post in
+                        let newRank = Int64(currentPosts.firstIndex(where: { $0.data.name == post.name }) ?? Int(post.rank))
+                        guard post.rank != newRank else { return nil }
+                        print("updating \(post.name) to \(newRank) was (\(post.rank))")
+                        return Post(
+                            id: post.id,
+                            name: post.name,
+                            rank: newRank
+                        )
+                    },
+                removedPosts: remote.initial.posts
+                    .filter { removedPostNames.contains($0.name)}
+            )
+        }
+        .flatMap(to: Diff.self) { diff in
+            print("saving \(diff.newPosts.count)")
+            return diff.newPosts
+                .map { $0.save(on: diff.initial.connection) }
+                .flatten(on: context.container)
+                .transform(to: diff)
+        }
+        .flatMap(to: Diff.self) { diff in
+            print("updating \(diff.updatedPosts.count)")
+            return diff.updatedPosts
+                .map { $0.update(on: diff.initial.connection)}
+                .flatten(on: context.container)
+                .transform(to: diff)
+        }
+        .flatMap(to: Diff.self) { diff in
+            print("checking removed \(diff.removedPosts.count)")
+            
+        }
+        .map(to: Void.self) { value in
+            print("!!!! close db!! \(value.initial.connection)")
+            value.initial.connection.close()
         }
         
         //let posts = Post.query(on: req).all()
@@ -153,7 +218,7 @@ struct QueryFrontpageCommand: Command {
         }
     }
     
-    private static func fetchFrontpage(client: Client, responses: [PostsResponseData] = [], max: Int = 10) -> Future<[PostsResponseData]> {
+    private static func fetchFrontpage(client: Client, responses: [PostsResponseData] = [], max: Int = 1) -> Future<[PostsResponseData]> {
         print("fetch front page \(responses.count)")
         let future: Future<[PostsResponseData]> = client.get(
             URLs.all(after: responses.last?.after)
@@ -174,6 +239,18 @@ struct QueryFrontpageCommand: Command {
             return future.flatMap { responses in
                 return QueryFrontpageCommand.fetchFrontpage(client: client, responses: responses)
             }
+        }
+    }
+    
+    private static func fetchInfo(client: Client, removed posts: [Post]) -> Future<[(info: PostsResponseData.Child, post: Post)]> {
+        guard !posts.isEmpty else {
+            return client.container.future([])
+        }
+        let posts = posts.chunked(into: 99)
+        return posts.map {
+            client.get(
+                URLs.info(for: $0.map { $0.data.name })
+            )
         }
     }
 }
@@ -233,5 +310,13 @@ extension String {
     
     func toBase64() -> String {
         return Data(self.utf8).base64EncodedString()
+    }
+}
+
+extension Array {
+    func chunked(into size: Int) -> [[Element]] {
+        return stride(from: 0, to: count, by: size).map {
+            Array(self[$0 ..< Swift.min($0 + size, count)])
+        }
     }
 }

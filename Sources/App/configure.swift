@@ -17,7 +17,12 @@ public func configure(
     if let url = Environment.get("DATABASE_URL") {
         postgreSQLConfig = PostgreSQLDatabaseConfig(url: url)!
     } else {
-        postgreSQLConfig = try PostgreSQLDatabaseConfig.default()
+        postgreSQLConfig = PostgreSQLDatabaseConfig(
+            hostname: "localhost",
+            port: 5432,
+            username: "postgres",
+            database: "frontpagewatch"
+        )
     }
     
     let postgreSQL = PostgreSQLDatabase(config: postgreSQLConfig)

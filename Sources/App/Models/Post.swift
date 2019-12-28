@@ -11,12 +11,12 @@ import Vapor
 struct Post: PostgreSQLModel {
     typealias ID = Int
     var id: ID?
-    var date: Date
-    var content: String
+    var name: String
+    var rank: Int64
 
-    init(id: ID? = nil, date: Date, content: String) {
+    init(id: ID? = nil, name: String, rank: Int64) {
         self.id = id
-        self.date = date
-        self.content = content
+        self.name = name
+        self.rank = rank
     }
 }
