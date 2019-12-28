@@ -26,7 +26,7 @@ struct PostsResponseData: Content {
         var data: Data
     }
     
-    var modhash: String
+    var modhash: String?
     var dist: Int
     var children: [Child]
     var before: String?

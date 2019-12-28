@@ -18,10 +18,10 @@ fileprivate struct URLs {
     static let accessToken = "https://www.reddit.com/api/v1/access_token"
     static func all(after: String?) -> String {
         let after = (after != nil) ? "&after=\(after!)" : ""
-        return "https://www.reddit.com/r/all/hot.json?limit=100&g=GLOBAL\(after)"
+        return "https://oauth.reddit.com/r/all/hot.json?limit=100&g=GLOBAL\(after)"
     }
     static func info(for names: [String]) -> String {
-        return "https://old.reddit.com/api/info.json?id=\(names.joined(separator: ","))"
+        return "https://oauth.reddit.com/api/info.json?id=\(names.joined(separator: ","))"
     }
     static var submit = "https://oauth.reddit.com/api/submit"
 }
@@ -107,7 +107,7 @@ struct QueryFrontpageCommand: Command {
         }
         .flatMap(to: Remote.self) { auth in
             //print("!!fetching hot!!!")
-            return QueryFrontpageCommand.fetchFrontpage(client: env.client).map { responses in
+            return QueryFrontpageCommand.fetchFrontpage(client: env.client, token: auth.token).map { responses in
                 return Remote(
                     initial: auth.initial,
                     token: auth.token,
@@ -161,7 +161,7 @@ struct QueryFrontpageCommand: Command {
         }
         .flatMap(to: RemovedInfo.self) { diff in
             print("checking removed \(diff.removedPosts.count)")
-            return QueryFrontpageCommand.fetchInfo(client: env.client, removed: diff.removedPosts).map {
+            return QueryFrontpageCommand.fetchInfo(client: env.client, token: diff.token, removed: diff.removedPosts).map {
                 RemovedInfo(diff: diff, removedPosts: $0)
             }
         }
@@ -181,7 +181,7 @@ struct QueryFrontpageCommand: Command {
                 let censoredPost = params.element
                 let promise = context.container.eventLoop.newPromise(Void.self)
                 let data = censoredPost.info.data
-                let title = "[#\(censoredPost.post.rank)|+\(data.ups)|-\(data.downs)] \(data.title.truncate(length: 240 - data.subreddit_name_prefixed.count)) [\(data.subreddit_name_prefixed)]"
+                let title = "[#\(censoredPost.post.rank)|+\(data.ups)|\(data.num_comments)] \(data.title.truncate(length: 240 - data.subreddit_name_prefixed.count)) [\(data.subreddit_name_prefixed)]"
                 let permalink = "reddit.com\(data.permalink)"
                 print("posting \(title) \(permalink)")
                 let httpReq = HTTPRequest(
@@ -267,14 +267,29 @@ struct QueryFrontpageCommand: Command {
         }
     }
     
-    private static func fetchFrontpage(client: Client, responses: [PostsResponseData] = [], max: Int = 1) -> Future<[PostsResponseData]> {
+    private static func fetchFrontpage(client: Client, token: String, responses: [PostsResponseData] = [], max: Int = 1) -> Future<[PostsResponseData]> {
         print("fetch front page \(responses.count)")
-        let future: Future<[PostsResponseData]> = client.get(
-            URLs.all(after: responses.last?.after)
+        let httpReq = HTTPRequest(
+           method: .GET,
+           url: URLs.all(after: responses.last?.after),
+           version: .init(major: 1, minor: 1),
+           headers: [
+               "Authorization": "bearer \(token)",
+               "User-Agent": "FrontpageWatch2020/0.1 by FrontpageWatch2020"
+           ]
+       )
+
+        let future: Future<[PostsResponseData]> = client.send(
+            // URLs.all(after: responses.last?.after)
+            Request(http: httpReq, using: client.container)
         ).map { response in
             if let error = try? response.content.syncGet(String.self, at: "error") {
                 throw FrontpageError.fetchError(message: error)
+            } else if let errorCode = try? response.content.syncGet(Int.self, at: "error") {
+                let message = try? response.content.syncGet(String.self, at: "message")
+                throw FrontpageError.fetchError(message: "error: \(errorCode) message: \(message ?? "")")
             }
+            // print("!!! frontpage: \(response.content)")
             let responseData = try response.content.syncGet(PostsResponseData.self, at: "data")
             print("!!!! fetched: \(responseData.children.count) posts")
             return responses + [responseData]
@@ -286,21 +301,38 @@ struct QueryFrontpageCommand: Command {
         } else {
             print("queueing up next one now")
             return future.flatMap { responses in
-                return QueryFrontpageCommand.fetchFrontpage(client: client, responses: responses)
+                return QueryFrontpageCommand.fetchFrontpage(client: client, token: token, responses: responses)
             }
         }
     }
     
-    private static func fetchInfo(client: Client, removed removedPosts: [Post]) -> Future<[(info: PostsResponseData.Child, post: Post)]> {
+    private static func fetchInfo(client: Client, token: String, removed removedPosts: [Post]) -> Future<[(info: PostsResponseData.Child, post: Post)]> {
         guard !removedPosts.isEmpty else {
             print("Nothing to check!! returning empty future")
             return client.container.future([])
         }
         let chunkedPosts = removedPosts.chunked(into: 99)
         let fetched: Future<[[(info: PostsResponseData.Child, post: Post)]]> = chunkedPosts.map { chunk in
-            client.get(
-                URLs.info(for: chunk.map { $0.name })
+            let httpReq = HTTPRequest(
+                method: .GET,
+                url: URLs.info(for: chunk.map { $0.name }),
+                version: .init(major: 1, minor: 1),
+                headers: [
+                    "Authorization": "bearer \(token)",
+                    "User-Agent": "FrontpageWatch2020/0.1 by FrontpageWatch2020"
+                ]
+            )
+
+            return client.send(
+                //URLs.info(for: chunk.map { $0.name })
+                Request(http: httpReq, using: client.container)
             ).map { response in
+                if let error = try? response.content.syncGet(String.self, at: "error") {
+                    throw FrontpageError.fetchError(message: error)
+                } else if let errorCode = try? response.content.syncGet(Int.self, at: "error") {
+                    let message = try? response.content.syncGet(String.self, at: "message")
+                    throw FrontpageError.fetchError(message: "error: \(errorCode) message: \(message ?? "")")
+                }
                 let postResponseData = try response.content.syncGet(PostsResponseData.self, at: "data")
                 let paired: [(info: PostsResponseData.Child, post: Post)] = postResponseData.children.compactMap { child in
                     guard let post = chunk.first(where: { $0.name == child.data.name }) else { return nil }
