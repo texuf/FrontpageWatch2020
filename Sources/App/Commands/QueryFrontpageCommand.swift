@@ -23,6 +23,7 @@ fileprivate struct URLs {
     static func info(for names: [String]) -> String {
         return "https://old.reddit.com/api/info.json?id=\(names.joined(separator: ","))"
     }
+    static var submit = "https://oauth.reddit.com/api/submit"
 }
 
 struct QueryFrontpageCommand: Command {
@@ -60,7 +61,7 @@ struct QueryFrontpageCommand: Command {
     
     struct RemovedInfo {
         let diff: Diff
-        let removedPosts: [PostsResponseData]
+        let removedPosts: [(info: PostsResponseData.Child, post: Post)]
     }
     
     /// See `Command`
@@ -158,13 +159,60 @@ struct QueryFrontpageCommand: Command {
                 .flatten(on: context.container)
                 .transform(to: diff)
         }
-        .flatMap(to: Diff.self) { diff in
+        .flatMap(to: RemovedInfo.self) { diff in
             print("checking removed \(diff.removedPosts.count)")
-            
+            return QueryFrontpageCommand.fetchInfo(client: env.client, removed: diff.removedPosts).map {
+                RemovedInfo(diff: diff, removedPosts: $0)
+            }
+        }
+        .flatMap(to: RemovedInfo.self) { removedInfo in
+            let removedWithoutCensorship = removedInfo.removedPosts.filter { $0.info.data.removed_by_category == nil }
+            print("deleting \(removedWithoutCensorship.count) uncensored posts")
+            return removedWithoutCensorship.map {
+                $0.post.delete(on: removedInfo.diff.initial.connection)
+            }
+            .flatten(on: context.container)
+            .transform(to: removedInfo)
+        }
+        .flatMap(to: RemovedInfo.self) { removedInfo in
+            let censored = removedInfo.removedPosts.filter { $0.info.data.removed_by_category != nil }
+            print("found \(censored.count) censored posts")
+            return censored.enumerated().map { params in
+                let censoredPost = params.element
+                let promise = context.container.eventLoop.newPromise(Void.self)
+                let data = censoredPost.info.data
+                let title = "[#\(censoredPost.post.rank)|+\(data.ups)|-\(data.downs)] \(data.title.truncate(length: 240 - data.subreddit_name_prefixed.count)) [\(data.subreddit_name_prefixed)]"
+                let permalink = "reddit.com\(data.permalink)"
+                print("posting \(title) \(permalink)")
+                let httpReq = HTTPRequest(
+                    method: .POST,
+                    url: URLs.submit,
+                    version: .init(major: 1, minor: 1),
+                    headers: [
+                        "Authorization": "bearer \(removedInfo.diff.token)",
+                        "User-Agent": "FrontpageWatch2020/0.1 by FrontpageWatch2020"
+                    ],
+                    body: "sr=undelete&kind=link&title=\(title)&url=\(permalink)"
+                )
+                let waitTime = 1 * Double(params.offset)
+                DispatchQueue.global().asyncAfter(deadline: .now() + waitTime) {
+                    print("posting \(title) after \(waitTime)s wait")
+                    let req = Request(http: httpReq, using: context.container)
+                    _ = env.client.send(req).map { response in
+                        print("!!!! submit post response \(response.content)")
+                        _ = censoredPost.post.delete(on: removedInfo.diff.initial.connection).map {
+                            promise.succeed()
+                        }
+                    }
+                }
+                return promise.futureResult
+            }
+            .flatten(on: context.container)
+            .transform(to: removedInfo)
         }
         .map(to: Void.self) { value in
-            print("!!!! close db!! \(value.initial.connection)")
-            value.initial.connection.close()
+            print("!!!! close db!! \(value.diff.initial.connection)")
+            value.diff.initial.connection.close()
         }
         
         //let posts = Post.query(on: req).all()
@@ -194,7 +242,8 @@ struct QueryFrontpageCommand: Command {
                     url: URLs.accessToken,
                     version: .init(major: 1, minor: 1),
                     headers: [
-                        "Authorization": "Basic " + "\(env.clientID):\(env.clientSecret)".toBase64()
+                        "Authorization": "Basic " + "\(env.clientID):\(env.clientSecret)".toBase64(),
+                        "User-Agent": "FrontpageWatch2020/0.1 by FrontpageWatch2020"
                     ],
                     body: "grant_type=password&username=\(env.username)&password=\(env.password)"
                 )
@@ -242,34 +291,30 @@ struct QueryFrontpageCommand: Command {
         }
     }
     
-    private static func fetchInfo(client: Client, removed posts: [Post]) -> Future<[(info: PostsResponseData.Child, post: Post)]> {
-        guard !posts.isEmpty else {
+    private static func fetchInfo(client: Client, removed removedPosts: [Post]) -> Future<[(info: PostsResponseData.Child, post: Post)]> {
+        guard !removedPosts.isEmpty else {
+            print("Nothing to check!! returning empty future")
             return client.container.future([])
         }
-        let posts = posts.chunked(into: 99)
-        return posts.map {
+        let chunkedPosts = removedPosts.chunked(into: 99)
+        let fetched: Future<[[(info: PostsResponseData.Child, post: Post)]]> = chunkedPosts.map { chunk in
             client.get(
-                URLs.info(for: $0.map { $0.data.name })
-            )
+                URLs.info(for: chunk.map { $0.name })
+            ).map { response in
+                let postResponseData = try response.content.syncGet(PostsResponseData.self, at: "data")
+                let paired: [(info: PostsResponseData.Child, post: Post)] = postResponseData.children.compactMap { child in
+                    guard let post = chunk.first(where: { $0.name == child.data.name }) else { return nil }
+                    return (info: child, post: post)
+                }
+                return paired
+            }
         }
+        .flatten(on: client.container)
+        
+        
+        return fetched.map { $0.flatMap { $0 } }
     }
 }
-
-
-
-/*let promise = context.container.eventLoop.newPromise(Void.self)
-
-/// Dispatch some work to happen on a background thread
-DispatchQueue.global().async {
-    /// Puts the background thread to sleep
-    /// This will not affect any of the event loops
-    sleep(5)
-
-    /// When the "blocking work" has completed,
-    /// complete the promise and its associated future.
-    print("promise succeed!!!!")
-    promise.succeed()
-}*/
 
 extension AccessToken {
     init(now: Date, context: ContentContainer<Response>) throws {
@@ -310,6 +355,21 @@ extension String {
     
     func toBase64() -> String {
         return Data(self.utf8).base64EncodedString()
+    }
+    /**
+     Truncates the string to the specified length number of characters and appends an optional trailing string if longer.
+     
+     - Parameter length: A `String`.
+     - Parameter trailing: A `String` that will be appended after the truncation.
+    
+     - Returns: A `String` object.
+     */
+    func truncate(length: Int, trailing: String = "…") -> String {
+        if self.count > length {
+            return String(self.prefix(length)) + trailing
+        } else {
+            return self
+        }
     }
 }
 

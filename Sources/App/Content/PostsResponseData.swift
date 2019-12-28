@@ -20,6 +20,7 @@ struct PostsResponseData: Content {
             var title: String
             var subreddit: String
             var subreddit_name_prefixed: String
+            var permalink: String
         }
         var kind: String
         var data: Data
