@@ -4,6 +4,11 @@
 ## For fun, not so much profit
 
 
+### testing locally
+```
+# after installing the vapor app, cd into the project and run the folling (-t will post to reddit_api_test)
+swift run Run query -u [my username] -p [my password] -c [reddit app id] -s [reddit app secret] -t true
+```
 
 
 ### How I built this

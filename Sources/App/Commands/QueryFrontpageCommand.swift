@@ -27,13 +27,20 @@ fileprivate struct URLs {
 }
 
 struct QueryFrontpageCommand: Command {
+    struct PostBody: Content {
+        static let defaultContentType: MediaType = .urlEncodedForm
+        let sr: String
+        let kind: String
+        let title: String
+        let url: String
+    }
     struct Env {
         let username: String
         let password: String
         let clientID: String
         let clientSecret: String
         let client: Client
-        let skipPost: Bool
+        let testing: Bool
     }
     
     struct Initial {
@@ -77,7 +84,7 @@ struct QueryFrontpageCommand: Command {
             .env(name: "REDDIT_PASSWORD", short: "p"),
             .env(name: "CLIENT_ID", short: "c"),
             .env(name: "CLIENT_SECRET", short: "s"),
-            .env(name: "skipPost", short: "k")
+            .env(name: "testing", short: "t")
         ]
     }
     
@@ -94,7 +101,7 @@ struct QueryFrontpageCommand: Command {
             clientID: try Environment.require("CLIENT_ID", with: context),
             clientSecret: try Environment.require("CLIENT_SECRET", with: context),
             client: try context.container.client(),
-            skipPost: context.options["skipPost"] == "true"
+            testing: context.options["testing"] == "true"
         )
         
         let future = context.container.newConnection(to: .psql)
@@ -131,12 +138,14 @@ struct QueryFrontpageCommand: Command {
                 newPosts: currentPosts
                     .enumerated()
                     .filter { arg in newNames.contains(arg.element.data.name) }
-                    .map { arg in Post(name: arg.element.data.name, rank: Int64(arg.offset) )},
+                    .map { arg in Post(name: arg.element.data.name, rank: arg.offset.postRank )},
                 updatedPosts: remote.initial.posts
                     .filter { currentNames.contains($0.name )}
                     .compactMap { post in
-                        let newRank = Int64(currentPosts.firstIndex(where: { $0.data.name == post.name }) ?? Int(post.rank))
-                        guard post.rank != newRank else { return nil }
+                        guard let newRank = currentPosts.firstIndex(where: { $0.data.name == post.name })?.postRank, newRank != post.rank else {
+                            // new rank is the same, this item was not updated
+                            return nil
+                        }
                         // print("updating \(post.name) to \(newRank) was (\(post.rank))")
                         return Post(
                             id: post.id,
@@ -186,28 +195,19 @@ struct QueryFrontpageCommand: Command {
                 let data = censoredPost.info.data
                 let title = "[#\(censoredPost.post.rank)|+\(data.ups)|\(data.num_comments)] \(data.title.truncate(length: 240 - data.subreddit_name_prefixed.count)) [\(data.subreddit_name_prefixed)]"
                 let permalink = "reddit.com\(data.permalink)"
-                let httpReq = HTTPRequest(
-                    method: .POST,
-                    url: URLs.submit,
-                    version: .init(major: 1, minor: 1),
-                    headers: [
-                        "Authorization": "bearer \(removedInfo.diff.token)",
-                        "User-Agent": "FrontpageWatch2020/0.1 by FrontpageWatch2020"
-                    ],
-                    body: "sr=undelete&kind=link&title=\(title)&url=\(permalink)"
-                )
+                let subreddit = env.testing ? "reddit_api_test" : "undelete"
+                let postBody = PostBody(sr: subreddit, kind: "link", title: title, url: permalink)
+                let headers: HTTPHeaders = [
+                    "Authorization": "bearer \(removedInfo.diff.token)",
+                    "User-Agent": "FrontpageWatch2020/0.1 by FrontpageWatch2020"
+                ]
                 let waitTime = 1 * Double(params.offset)
                 DispatchQueue.global().asyncAfter(deadline: .now() + waitTime) {
-                    print("posting \(title) after \(waitTime)s wait")
-                    guard !env.skipPost else {
-                        print("returning because skipPost == 'true'")
-                        _ = censoredPost.post.delete(on: removedInfo.diff.initial.connection).map {
-                            promise.succeed()
-                        }
-                        return
-                    }
-                    let req = Request(http: httpReq, using: context.container)
-                    _ = env.client.send(req).map { response in
+                    print("posting \(title) after \(waitTime)s wait, reason: \(data.removed_by_category ?? "nil") ")
+                    //let req = Request(http: httpReq, using: context.container)
+                    _ = env.client.post(URLs.submit, headers: headers, beforeSend: { request in
+                        try request.content.encode(postBody)
+                    }).map { response in
                         print("!!!! submit post response \(response.content)")
                         _ = censoredPost.post.delete(on: removedInfo.diff.initial.connection).map {
                             promise.succeed()
@@ -416,5 +416,12 @@ extension Array {
         return stride(from: 0, to: count, by: size).map {
             Array(self[$0 ..< Swift.min($0 + size, count)])
         }
+    }
+}
+
+extension Int {
+    /// return 1 based int64 index of optional int
+    var postRank: Int64 {
+        return Int64(self + 1)
     }
 }
