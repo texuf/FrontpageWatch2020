@@ -89,4 +89,5 @@ yep
 # install the heroku scheduler https://devcenter.heroku.com/articles/scheduler
 heroku addons:create scheduler:standard
 
+add a job `Run query` every 10 minutes
 ```
