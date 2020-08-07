@@ -194,7 +194,7 @@ struct QueryFrontpageCommand: Command {
             .transform(to: removedInfo)
         }
         .flatMap(to: RemovedInfo.self) { removedInfo in
-            let censored = removedInfo.removedPosts.filter { $0.info.data.removed_by_category != nil }
+            let censored = removedInfo.removedPosts.filter { $0.info.data.removed_by_category != nil  && $0.post.rank >= env.minPostRank }
             print("found \(censored.count) censored posts")
             return censored.enumerated().map { params in
                 let censoredPost = params.element
