@@ -49,6 +49,7 @@ https://docs.vapor.codes/3.0/fluent/getting-started/
 brew install postgresql
 brew services start postgresql
 /usr/local/opt/postgres/bin/createuser -s postgres
+/usr/local/opt/postgres/bin/createdb frontpagewatch
 
 # create a schema
     # create initial post model

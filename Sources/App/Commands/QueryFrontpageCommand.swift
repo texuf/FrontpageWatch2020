@@ -39,6 +39,8 @@ struct QueryFrontpageCommand: Command {
         let password: String
         let clientID: String
         let clientSecret: String
+        let subreddit: String
+        let fetchPageCount: Int
         let client: Client
         let testing: Bool
     }
@@ -100,6 +102,8 @@ struct QueryFrontpageCommand: Command {
             password: try Environment.require("REDDIT_PASSWORD", with: context),
             clientID: try Environment.require("CLIENT_ID", with: context),
             clientSecret: try Environment.require("CLIENT_SECRET", with: context),
+            subreddit: try Environment.require("SUBREDDIT", with: context), // "reddit_api_test" makes a good test subreddit
+            fetchPageCount: Int(try Environment.require("FETCH_PAGE_COUNT", with: context)) ?? 1,
             client: try context.container.client(),
             testing: context.options["testing"] == "true"
         )
@@ -117,7 +121,7 @@ struct QueryFrontpageCommand: Command {
         }
         .flatMap(to: Remote.self) { auth in
             //print("!!fetching hot!!!")
-            return QueryFrontpageCommand.fetchFrontpage(client: env.client, token: auth.token).map { responses in
+            return QueryFrontpageCommand.fetchFrontpage(client: env.client, token: auth.token, max: env.fetchPageCount).map { responses in
                 return Remote(
                     initial: auth.initial,
                     token: auth.token,
@@ -195,7 +199,7 @@ struct QueryFrontpageCommand: Command {
                 let data = censoredPost.info.data
                 let title = "[#\(censoredPost.post.rank)|+\(data.ups)|\(data.num_comments)] \(data.title.truncate(length: 240 - data.subreddit_name_prefixed.count)) [\(data.subreddit_name_prefixed)]"
                 let permalink = "reddit.com\(data.permalink)"
-                let subreddit = env.testing ? "reddit_api_test" : "undelete"
+                let subreddit = env.subreddit
                 let postBody = PostBody(sr: subreddit, kind: "link", title: title, url: permalink)
                 let headers: HTTPHeaders = [
                     "Authorization": "bearer \(removedInfo.diff.token)",
@@ -273,7 +277,7 @@ struct QueryFrontpageCommand: Command {
         }
     }
     
-    private static func fetchFrontpage(client: Client, token: String, responses: [PostsResponseData] = [], max: Int = 1) -> Future<[PostsResponseData]> {
+    private static func fetchFrontpage(client: Client, token: String, responses: [PostsResponseData] = [], max: Int) -> Future<[PostsResponseData]> {
         print("fetch front page \(responses.count)")
         let httpReq = HTTPRequest(
            method: .GET,
@@ -307,7 +311,7 @@ struct QueryFrontpageCommand: Command {
         } else {
             // print("queueing up next one now")
             return future.flatMap { responses in
-                return QueryFrontpageCommand.fetchFrontpage(client: client, token: token, responses: responses)
+                return QueryFrontpageCommand.fetchFrontpage(client: client, token: token, responses: responses, max: max)
             }
         }
     }
