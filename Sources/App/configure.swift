@@ -1,5 +1,5 @@
 import FluentPostgreSQL
-import Vapor
+import Vapor	
 
 /// Called before your application initializes.
 ///
@@ -15,12 +15,8 @@ public func configure(
     let postgreSQLConfig : PostgreSQLDatabaseConfig
 
     if let url = Environment.get("DATABASE_URL") {
-        guard var config: PostgresConfiguration = PostgresConfiguration(url: url) else {
-            fatalError("Can't configure postgres")
-        }
-        config.tlsConfiguration = .forClient(certificateVerification: .none)
-        //config.tlsConfiguration = .forClient()
-        app.databases.use(.postgres(configuration: config), as: .psql)
+        
+        postgreSQLConfig = PostgreSQLDatabaseConfig(url: url, transport: .unverifiedTLS)!
     } else {
         postgreSQLConfig = PostgreSQLDatabaseConfig(
             hostname: "localhost",
