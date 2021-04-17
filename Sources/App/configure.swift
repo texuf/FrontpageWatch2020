@@ -15,7 +15,12 @@ public func configure(
     let postgreSQLConfig : PostgreSQLDatabaseConfig
 
     if let url = Environment.get("DATABASE_URL") {
-        postgreSQLConfig = PostgreSQLDatabaseConfig(url: url)!
+        guard var config: PostgresConfiguration = PostgresConfiguration(url: url) else {
+            fatalError("Can't configure postgres")
+        }
+        config.tlsConfiguration = .forClient(certificateVerification: .none)
+        //config.tlsConfiguration = .forClient()
+        app.databases.use(.postgres(configuration: config), as: .psql)
     } else {
         postgreSQLConfig = PostgreSQLDatabaseConfig(
             hostname: "localhost",
