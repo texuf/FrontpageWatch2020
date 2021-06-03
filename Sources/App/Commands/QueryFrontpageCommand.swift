@@ -185,7 +185,10 @@ struct QueryFrontpageCommand: Command {
         }
         .flatMap(to: RemovedInfo.self) { removedInfo in
             print("got info for \(removedInfo.removedPosts.count) posts, didn't get: \(Set(removedInfo.diff.removedPosts.map { $0.name }).subtracting(removedInfo.removedPosts.map({ $0.post.name })))")
-            let removedWithoutCensorship = removedInfo.removedPosts.filter { $0.info.data.removed_by_category == nil }
+            let removedWithoutCensorship = removedInfo.removedPosts.filter {
+                $0.info.data.removed_by_category == nil
+                || $0.info.data.removed_by_category == "deleted"
+            }
             let removedAboveThreashold = removedInfo.removedPosts.filter { $0.info.data.removed_by_category != nil && $0.post.rank < env.minPostRank }
             
             let removedBelowThreashold = removedInfo.removedPosts.filter { $0.info.data.removed_by_category != nil && $0.post.rank > env.maxPostRank }
@@ -197,7 +200,12 @@ struct QueryFrontpageCommand: Command {
             .transform(to: removedInfo)
         }
         .flatMap(to: RemovedInfo.self) { removedInfo in
-            let censored = removedInfo.removedPosts.filter { $0.info.data.removed_by_category != nil  && $0.post.rank >= env.minPostRank && $0.post.rank <= env.maxPostRank }
+            let censored = removedInfo.removedPosts.filter {
+                $0.info.data.removed_by_category != nil
+                && $0.info.data.removed_by_category != "deleted"
+                && $0.post.rank >= env.minPostRank
+                && $0.post.rank <= env.maxPostRank
+            }
             print("found \(censored.count) censored posts")
             return censored.enumerated().map { params in
                 let censoredPost = params.element
