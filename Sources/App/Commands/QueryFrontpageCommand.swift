@@ -44,6 +44,7 @@ struct QueryFrontpageCommand: Command {
         let maxPostRank: Int /// what's the max post rank (undelete does 1 - 100)
         let client: Client
         let testing: Bool
+        let bDeleteOops: Bool
     }
     
     struct Initial {
@@ -107,7 +108,8 @@ struct QueryFrontpageCommand: Command {
             minPostRank: Int(try Environment.require("MIN_POST_RANK", with: context)) ?? 0,
             maxPostRank: Int(try Environment.require("MAX_POST_RANK", with: context)) ?? Int.max,
             client: try context.container.client(),
-            testing: context.options["testing"] == "true"
+            testing: context.options["testing"] == "true",
+            bDeleteOops: context.options["DELETE_OOPS"] == "true"
         )
         
         let future = context.container.newConnection(to: .psql)
@@ -184,17 +186,24 @@ struct QueryFrontpageCommand: Command {
             }
         }
         .flatMap(to: RemovedInfo.self) { removedInfo in
-            print("got info for \(removedInfo.removedPosts.count) posts, didn't get: \(Set(removedInfo.diff.removedPosts.map { $0.name }).subtracting(removedInfo.removedPosts.map({ $0.post.name })))")
+            let didntget = Set(removedInfo.diff.removedPosts.map { $0.name }).subtracting(removedInfo.removedPosts.map({ $0.post.name }))
+            print("got info for \(removedInfo.removedPosts.count) posts, didn't get: \(didntget)")
+            
+            let oops = env.bDeleteOops ? removedInfo.diff.removedPosts.filter({ didntget.contains($0.name) }) : []
+            
             let removedWithoutCensorship = removedInfo.removedPosts.filter {
                 $0.info.data.removed_by_category == nil
                 || $0.info.data.removed_by_category == "deleted"
-            }
-            let removedAboveThreashold = removedInfo.removedPosts.filter { $0.info.data.removed_by_category != nil && $0.post.rank < env.minPostRank }
+            }.map { $0.post }
             
-            let removedBelowThreashold = removedInfo.removedPosts.filter { $0.info.data.removed_by_category != nil && $0.post.rank > env.maxPostRank }
-            print("deleting \(removedWithoutCensorship.count) uncensored posts, \(removedAboveThreashold.count) censored posts ranked < \(env.minPostRank), \(removedBelowThreashold.count) > \(env.maxPostRank) ")
-            return (removedWithoutCensorship + removedAboveThreashold + removedBelowThreashold).map {
-                $0.post.delete(on: removedInfo.diff.initial.connection)
+            let removedAboveThreashold = removedInfo.removedPosts.filter { $0.info.data.removed_by_category != nil && $0.post.rank < env.minPostRank }.map { $0.post }
+            
+            let removedBelowThreashold = removedInfo.removedPosts.filter { $0.info.data.removed_by_category != nil && $0.post.rank > env.maxPostRank }.map { $0.post }
+            
+            print("deleting \(removedWithoutCensorship.count) uncensored posts, \(removedAboveThreashold.count) censored posts ranked < \(env.minPostRank), \(removedBelowThreashold.count) > \(env.maxPostRank), and \(oops.count) oops ")
+            
+            return (removedWithoutCensorship + removedAboveThreashold + removedBelowThreashold + oops).map {
+                $0.delete(on: removedInfo.diff.initial.connection)
             }
             .flatten(on: context.container)
             .transform(to: removedInfo)
