@@ -42,6 +42,7 @@ struct QueryFrontpageCommand: Command {
         let subreddit: String
         let fetchPageCount: Int /// how many pages do we fetch (100 posts per page)
         let minPostRank: Int /// what's the min rank required to count it (longtail does 101->1000
+        let maxPostRank: Int /// what's the max post rank (undelete does 1 - 100)
         let client: Client
         let testing: Bool
     }
@@ -106,6 +107,7 @@ struct QueryFrontpageCommand: Command {
             subreddit: try Environment.require("SUBREDDIT", with: context), // "reddit_api_test" makes a good test subreddit
             fetchPageCount: Int(try Environment.require("FETCH_PAGE_COUNT", with: context)) ?? 1,
             minPostRank: Int(try Environment.require("MIN_POST_RANK", with: context)) ?? 0,
+            maxPostRank: Int(try Environment.require("MAX_POST_RANK", with: context)) ?? Int.max,
             client: try context.container.client(),
             testing: context.options["testing"] == "true"
         )
@@ -186,15 +188,17 @@ struct QueryFrontpageCommand: Command {
         .flatMap(to: RemovedInfo.self) { removedInfo in
             let removedWithoutCensorship = removedInfo.removedPosts.filter { $0.info.data.removed_by_category == nil }
             let removedAboveThreashold = removedInfo.removedPosts.filter { $0.info.data.removed_by_category != nil && $0.post.rank < env.minPostRank }
-            print("deleting \(removedWithoutCensorship.count) uncensored posts, \(removedAboveThreashold.count) censored posts ranked < \(env.minPostRank) ")
-            return (removedWithoutCensorship + removedAboveThreashold).map {
+            
+            let removedBelowThreashold = removedInfo.removedPosts.filter { $0.info.data.removed_by_category != nil && $0.post.rank > env.maxPostRank }
+            print("deleting \(removedWithoutCensorship.count) uncensored posts, \(removedAboveThreashold.count) censored posts ranked < \(env.minPostRank), \(removedBelowThreashold.count) > \(env.maxPostRank) ")
+            return (removedWithoutCensorship + removedAboveThreashold + removedBelowThreashold).map {
                 $0.post.delete(on: removedInfo.diff.initial.connection)
             }
             .flatten(on: context.container)
             .transform(to: removedInfo)
         }
         .flatMap(to: RemovedInfo.self) { removedInfo in
-            let censored = removedInfo.removedPosts.filter { $0.info.data.removed_by_category != nil  && $0.post.rank >= env.minPostRank }
+            let censored = removedInfo.removedPosts.filter { $0.info.data.removed_by_category != nil  && $0.post.rank >= env.minPostRank && $0.post.rank <= env.maxPostRank }
             print("found \(censored.count) censored posts")
             return censored.enumerated().map { params in
                 let censoredPost = params.element
