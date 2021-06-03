@@ -39,7 +39,6 @@ struct QueryFrontpageCommand: Command {
         let password: String
         let clientID: String
         let clientSecret: String
-        let subreddit: String
         let fetchPageCount: Int /// how many pages do we fetch (100 posts per page)
         let minPostRank: Int /// what's the min rank required to count it (longtail does 101->1000
         let maxPostRank: Int /// what's the max post rank (undelete does 1 - 100)
@@ -104,7 +103,6 @@ struct QueryFrontpageCommand: Command {
             password: try Environment.require("REDDIT_PASSWORD", with: context),
             clientID: try Environment.require("CLIENT_ID", with: context),
             clientSecret: try Environment.require("CLIENT_SECRET", with: context),
-            subreddit: try Environment.require("SUBREDDIT", with: context), // "reddit_api_test" makes a good test subreddit
             fetchPageCount: Int(try Environment.require("FETCH_PAGE_COUNT", with: context)) ?? 1,
             minPostRank: Int(try Environment.require("MIN_POST_RANK", with: context)) ?? 0,
             maxPostRank: Int(try Environment.require("MAX_POST_RANK", with: context)) ?? Int.max,
@@ -206,7 +204,7 @@ struct QueryFrontpageCommand: Command {
                 let data = censoredPost.info.data
                 let title = "[#\(censoredPost.post.rank)|+\(data.ups)|\(data.num_comments)] \(data.title.truncate(length: 240 - data.subreddit_name_prefixed.count)) [\(data.subreddit_name_prefixed)]"
                 let permalink = "reddit.com\(data.permalink)"
-                let subreddit = env.subreddit
+                let subreddit = censoredPost.post.rank < 100 ? "undelete" : "longtail"
                 let postBody = PostBody(sr: subreddit, kind: "link", title: title, url: permalink)
                 let headers: HTTPHeaders = [
                     "Authorization": "bearer \(removedInfo.diff.token)",
