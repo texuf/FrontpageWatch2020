@@ -184,6 +184,7 @@ struct QueryFrontpageCommand: Command {
             }
         }
         .flatMap(to: RemovedInfo.self) { removedInfo in
+            print("got info for \(removedInfo.removedPosts.count) posts, didn't get: \(Set(removedInfo.diff.removedPosts.map { $0.name }).subtracting(removedInfo.removedPosts.map({ $0.post.name })))")
             let removedWithoutCensorship = removedInfo.removedPosts.filter { $0.info.data.removed_by_category == nil }
             let removedAboveThreashold = removedInfo.removedPosts.filter { $0.info.data.removed_by_category != nil && $0.post.rank < env.minPostRank }
             
